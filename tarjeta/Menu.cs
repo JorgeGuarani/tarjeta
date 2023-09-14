@@ -14,7 +14,7 @@ namespace tarjeta
         {
             SAPbouiCOM.Menus oMenus = null;
             SAPbouiCOM.MenuItem oMenuItem = null;
-            sbo = (SAPbobsCOM.Company)SAPbouiCOM.Framework.Application.SBO_Application.Company.GetDICompany();
+            sbo = (SAPbobsCOM.Company)SAPbouiCOM.Framework.Application.SBO_Application.Company.GetDICompany();           
 
             oMenus = SAPbouiCOM.Framework.Application.SBO_Application.Menus;
 
@@ -66,10 +66,9 @@ namespace tarjeta
             {
                 if (pVal.BeforeAction && pVal.MenuUID == "tarjeta.Form1")
                 {
-                    SAPbouiCOM.Framework.Application.SBO_Application.OpenForm(BoFormObjectEnum.fo_UserDefinedObject, "TARJETA", "");
-                    //Form1 activeForm = new Form1();
-                    //activeForm.Show();                                       
+                    SAPbouiCOM.Framework.Application.SBO_Application.OpenForm(BoFormObjectEnum.fo_UserDefinedObject, "TARJETA", "");                                   
                 }
+
             }
             catch (Exception ex)
             {
