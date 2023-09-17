@@ -7,6 +7,7 @@ using System.Threading;
 using System.Windows.Forms;
 using System.Drawing;
 using System.Globalization;
+using SAPbobsCOM;
 
 namespace tarjeta
 {
@@ -24,7 +25,7 @@ namespace tarjeta
         public override void OnInitializeComponent()
         {
             this.oForm = SAPbouiCOM.Framework.Application.SBO_Application.Forms.ActiveForm;
-            //             variables del UDO
+            //               variables del UDO
             this.oMatrix = ((SAPbouiCOM.Matrix)(this.GetItem("0_U_G").Specific));
             this.oMatrix.DoubleClickAfter += new SAPbouiCOM._IMatrixEvents_DoubleClickAfterEventHandler(this.oMatrix_DoubleClickAfter);
             this.txtCode = ((SAPbouiCOM.EditText)(this.GetItem("0_U_E").Specific));
@@ -34,8 +35,10 @@ namespace tarjeta
             this.txtCuentaMa = ((SAPbouiCOM.EditText)(this.GetItem("16_U_E").Specific));
             this.txtMemo = ((SAPbouiCOM.EditText)(this.GetItem("17_U_E").Specific));
             this.cboSucu = ((SAPbouiCOM.ComboBox)(this.GetItem("18_U_Cb").Specific));
+            this.cboSucu.ComboSelectAfter += new SAPbouiCOM._IComboBoxEvents_ComboSelectAfterEventHandler(this.cboSucu_ComboSelectAfter);
             this.txtCuentas = ((SAPbouiCOM.EditText)(this.GetItem("19_U_E").Specific));
-            //             variables agregados en el form
+            this.btnOK = ((SAPbouiCOM.Button)(this.GetItem("1").Specific));
+            //               variables agregados en el form
             this.btnAdd = ((SAPbouiCOM.Button)(this.GetItem("Item_0").Specific));
             this.btnAdd.ClickAfter += new SAPbouiCOM._IButtonEvents_ClickAfterEventHandler(this.btnAdd_ClickAfter);
             this.btnListar = ((SAPbouiCOM.Button)(this.GetItem("Item_1").Specific));
@@ -48,8 +51,9 @@ namespace tarjeta
             this.lblToExcel = ((SAPbouiCOM.StaticText)(this.GetItem("Item_8").Specific));
             this.lblProcExcel = ((SAPbouiCOM.StaticText)(this.GetItem("Item_9").Specific));
             this.Button0 = ((SAPbouiCOM.Button)(this.GetItem("1").Specific));
-            this.Button0.ClickBefore += new SAPbouiCOM._IButtonEvents_ClickBeforeEventHandler(this.Button0_ClickBefore);
             this.Button0.ClickAfter += new SAPbouiCOM._IButtonEvents_ClickAfterEventHandler(this.Button0_ClickAfter);
+            this.StaticText0 = ((SAPbouiCOM.StaticText)(this.GetItem("Item_3").Specific));
+            this.txtAsiento = ((SAPbouiCOM.EditText)(this.GetItem("Item_7").Specific));
             this.OnCustomInitialize();
 
         }
@@ -82,6 +86,11 @@ namespace tarjeta
         private SAPbouiCOM.StaticText lblToExcel;
         private SAPbouiCOM.StaticText lblProcExcel;
         private SAPbouiCOM.EditText txtCode;
+        private SAPbouiCOM.Button Button0;
+        private SAPbouiCOM.StaticText StaticText0;
+        private SAPbouiCOM.EditText txtAsiento;
+        private SAPbouiCOM.StaticText lblcuenta;
+        private SAPbouiCOM.Button btnOK;
         #endregion
 
 
@@ -97,39 +106,50 @@ namespace tarjeta
             int colortxt2 = System.Drawing.Color.Green.ToArgb();
             lblToExcel.Item.ForeColor = colortxt2;
             lblProcExcel.Item.ForeColor = colortxt2;
-
+            //code inicial
+            SAPbobsCOM.Recordset oCode;
+            oCode = (SAPbobsCOM.Recordset)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.BoRecordset);
+            oCode.DoQuery("SELECT COALESCE(MAX(\"DocEntry\"),0)+1 FROM \"@TARJETA\" ");
+            txtCode.Value = oCode.Fields.Item(0).Value.ToString();
+            txtFechaIni.Item.Click();
+            txtCode.Item.Enabled = false;
+            txtMemo.Value = "Compra POS TD -";
+            btnOK.Item.Enabled = false;
 
         }
 
-        private SAPbouiCOM.Button Button2;
+       
         
-        
-
+        //FUNCION PARA LISTAR LOS DATOS DE SAP Y CARGAR EN LA MATRIX
         private void btnListar_ClickAfter(object sboObject, SAPbouiCOM.SBOItemEventArg pVal)
-        {
-            
-
+        {            
             try
             {
                 //habilitamos el boton de excel
-                btnExcel.Item.Enabled = true;
+                btnExcel.Item.Enabled = true;               
                 //verificamos la variable de fecha
                 string v_fechaINI = txtFechaFin.Value;
                 string v_fechFIN = txtFechaFin.Value;
-                if (string.IsNullOrEmpty(v_fechaINI) || string.IsNullOrEmpty(v_fechFIN))
+                string v_feAsiento = txtAsiento.Value;
+                if (string.IsNullOrEmpty(v_fechaINI) || string.IsNullOrEmpty(v_fechFIN) || string.IsNullOrEmpty(v_feAsiento))
                 {
-                    SAPbouiCOM.Framework.Application.SBO_Application.MessageBox("Fecha de inicio o fin no pueden quedar vacío!!", 1, "OK");
+                    SAPbouiCOM.Framework.Application.SBO_Application.MessageBox("Fecha de Inicio, Fin o Asiento no puede quedar vacío!!", 1, "OK");
                     return;
                 }
 
                 //verificamos el tipo de tarjeta seleccionada
                 string v_tipo = null;
                 string v_tarj = cboTar.Selected.Value;
-                string v_cuenta = txtCuentas.Value.ToString();
 
-                if (string.IsNullOrEmpty(v_cuenta))
+                if (string.IsNullOrEmpty(txtCuentaMa.Value.ToString()))
                 {
-                    SAPbouiCOM.Framework.Application.SBO_Application.MessageBox("El campo de cuenta no puede quedar vacío!!", 1, "OK");
+                    SAPbouiCOM.Framework.Application.SBO_Application.MessageBox("El campo de cuenta de BANCO no puede quedar vacío!!", 1, "OK");
+                    return;
+                }
+
+                if (cboSucu.Selected.Value.ToString().Equals("Seleccionar"))
+                {
+                    SAPbouiCOM.Framework.Application.SBO_Application.MessageBox("Debe seleccionar una sucursal", 1, "OK");
                     return;
                 }
 
@@ -143,7 +163,7 @@ namespace tarjeta
                                   "INNER JOIN \"FG_PROD\".ORCT T1 ON T0.\"DocNum\"=T1.\"DocNum\" "+
                                   "INNER JOIN \"FG_PROD\".OINV T2 ON T1.\"DocNum\"=T2.\"ReceiptNum\" " +
                                   "WHERE T0.\"CrTypeCode\"=" + v_tipo + " AND T1.\"DocDate\" BETWEEN '" + txtFechaIni.Value + "' AND '" + txtFechaFin.Value + "' " +
-                                  "AND T0.\"CreditAcct\" IN ("+ v_cuenta + ") ");
+                                  "AND T0.\"CreditAcct\" IN ('"+ cboSucu.Selected.Value + "') AND (T2.\"U_U_Destino\" IS NULL OR T2.\"U_U_Destino\"='NO')  ");
 
                 SAPbouiCOM.DBDataSource source = oForm.DataSources.DBDataSources.Item("@TARJETADET");
                 oMatrix.FlushToDataSource();
@@ -182,6 +202,7 @@ namespace tarjeta
                     
 
                 }
+                btnOK.Item.Enabled = true;
             }
             catch (Exception e)
             {
@@ -190,7 +211,7 @@ namespace tarjeta
 
         }
 
-        //proceso para abrir el buscador de archivos
+        //PROCESO PARA ABRIR LA BUSQUEDA DE ARCHIVOS
         private void btnExcel_ClickAfter(object sboObject, SAPbouiCOM.SBOItemEventArg pVal)
         {
             //buscamos el archivo EXCEL
@@ -213,7 +234,7 @@ namespace tarjeta
 
         }
 
-        //funcion para buscar excel
+        //FUNCION PARA SUBRI EXCEL
         private void subirExcel(string url)
         {
             //instaciamos los servicios de excel
@@ -294,6 +315,7 @@ namespace tarjeta
             //oProgresbar.Stop();
         }
 
+        //FUNCION PARA AGREGAR CUENTA
         private void btnAdd_ClickAfter(object sboObject, SAPbouiCOM.SBOItemEventArg pVal)
         {
             //agarramos la sucursal seleccionada
@@ -308,31 +330,22 @@ namespace tarjeta
             }
             
             txtCuentas.Value = v_cuenta;
+            txtMemo.Value = "Compra POS TD - " + cboSucu.Selected.Description.ToString();
 
         }
 
-        //evento para desplegar la factura
+        //EVENTO PARA DESPLEGAR LA FACTURA
         private void oMatrix_DoubleClickAfter(object sboObject, SAPbouiCOM.SBOItemEventArg pVal)
-        {
-            try
+        { 
+            if (pVal.ColUID == "C_0_2")
             {
-                if (pVal.ColUID == "C_0_2")
-                {
-                    SAPbouiCOM.EditText oDoc = (SAPbouiCOM.EditText)oMatrix.Columns.Item(2).Cells.Item(pVal.Row).Specific;
-                    string v_doc = oDoc.Value;
-                    SAPbouiCOM.Framework.Application.SBO_Application.OpenForm(SAPbouiCOM.BoFormObjectEnum.fo_Invoice, "", v_doc);
-                }
+                SAPbouiCOM.EditText oDoc = (SAPbouiCOM.EditText)oMatrix.Columns.Item(2).Cells.Item(pVal.Row).Specific;
+                string v_doc = oDoc.Value;
+                SAPbouiCOM.Framework.Application.SBO_Application.OpenForm(SAPbouiCOM.BoFormObjectEnum.fo_Invoice, "", v_doc);
             }
-            catch(Exception e)
-            {
-                SAPbouiCOM.Framework.Application.SBO_Application.MessageBox(e.ToString(), 1, "OK");
-            }           
         }
-
-        private SAPbouiCOM.Button Button0;
-
-
-        //crear los asientos contables
+        
+        //FUNCION PARA CREAR LOS ASIENTOS CONTABLES
         private void Button0_ClickAfter(object sboObject, SAPbouiCOM.SBOItemEventArg pVal)
         {
            try
@@ -341,6 +354,8 @@ namespace tarjeta
                 SAPbobsCOM.JournalEntries oAsiento;
                 oAsiento = (SAPbobsCOM.JournalEntries)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.oJournalEntries);
 
+                SAPbobsCOM.SBObob objBridge = (SAPbobsCOM.SBObob)Menu.sbo.GetBusinessObject(BoObjectTypes.BoBridge);
+                DateTime v_feAsiento = Convert.ToDateTime(objBridge.Format_StringToDate(txtAsiento.Value).Fields.Item(0).Value);
                 //recorremos la matrix
                 int v_cant = oMatrix.RowCount;
                 int fila = 1;
@@ -349,27 +364,29 @@ namespace tarjeta
                     SAPbouiCOM.CheckBox oCheck = (SAPbouiCOM.CheckBox)oMatrix.Columns.Item(1).Cells.Item(fila).Specific;
                     SAPbouiCOM.EditText oDocnum = (SAPbouiCOM.EditText)oMatrix.Columns.Item(2).Cells.Item(fila).Specific;
                     SAPbouiCOM.EditText oMonto = (SAPbouiCOM.EditText)oMatrix.Columns.Item(6).Cells.Item(fila).Specific;
-
+                    
                     //consultamos si esta checkeado
                     bool v_check = oCheck.Checked;
                     if (v_check == true)
                     {
                         //mandamos las variables
+                        double v_monto = double.Parse(oMonto.Value.Replace(".", ","));
+                        string v_cuentaCredito = cboSucu.Selected.Value;
                         //cabecera
                         oAsiento.Series = 23;
-                        oAsiento.TaxDate = DateTime.Now;
-                        oAsiento.DueDate = DateTime.Now;
-                        oAsiento.ReferenceDate = DateTime.Now;
+                        oAsiento.TaxDate = v_feAsiento;
+                        oAsiento.DueDate = v_feAsiento;
+                        oAsiento.ReferenceDate = v_feAsiento;
                         oAsiento.Memo = txtMemo.Value;
-                        oAsiento.Reference = oDocnum.Value;
+                        oAsiento.UserFields.Fields.Item("U_FactEntry").Value = oDocnum.Value;
                         //detalle
                         //debito
                         oAsiento.Lines.AccountCode = txtCuentaMa.Value;
-                        oAsiento.Lines.Debit = double.Parse(oMonto.Value.Replace(".",","));
+                        oAsiento.Lines.Debit = v_monto;
                         oAsiento.Lines.Add();
                         //credito
-                        oAsiento.Lines.AccountCode = txtCuentas.Value.Replace("'", string.Empty);
-                        oAsiento.Lines.Credit = double.Parse(oMonto.Value.Replace(".", ","));
+                        oAsiento.Lines.AccountCode = v_cuentaCredito;
+                        oAsiento.Lines.Credit = v_monto;
                         oAsiento.Lines.Add();
                         int error = oAsiento.Add();
                         if (error != 0)
@@ -385,6 +402,7 @@ namespace tarjeta
                             if(oDocumento.GetByKey(int.Parse(oDocnum.Value)))
                             {
                                 oDocumento.UserFields.Fields.Item("U_U_Destino").Value = "SI";
+                                oDocumento.Update();
                             }
                         }
                     }
@@ -397,15 +415,11 @@ namespace tarjeta
 
         }
 
-        private void Button0_ClickBefore(object sboObject, SAPbouiCOM.SBOItemEventArg pVal, out bool BubbleEvent)
+        //FUNCIONA AL SELECCIONAR UNA SUCURSAL
+        private void cboSucu_ComboSelectAfter(object sboObject, SAPbouiCOM.SBOItemEventArg pVal)
         {
-            BubbleEvent = true;
-            //throw new System.NotImplementedException();
-            v_documento = txtCode.Value;
+            txtMemo.Value = "Compra POS TD - " + cboSucu.Selected.Description.ToString();
 
         }
-
-
-
     }
 }
