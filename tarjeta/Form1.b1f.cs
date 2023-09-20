@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Xml;
 using SAPbouiCOM.Framework;
 using SAPbouiCOM;
+using SAPbobsCOM;
 
 namespace tarjeta
 {
@@ -49,7 +50,8 @@ namespace tarjeta
 
 
         private void Button0_ClickAfter(object sboObject, SAPbouiCOM.SBOItemEventArg pVal)
-        {            
+        {
+           
             //Actualizamos el campo de conciliacion
             string v_pago = null;
             SAPbobsCOM.Documents oFactura;
@@ -91,7 +93,7 @@ namespace tarjeta
                     int fila = 0;
                     SAPbobsCOM.Recordset oDatos;
                     oDatos = (SAPbobsCOM.Recordset)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.BoRecordset);
-                    oDatos.DoQuery("SELECT T0.\"Account\",T0.\"Debit\",T0.\"Credit\" FROM JDT1 T0 INNER JOIN OJDT T1 ON T0.\"TransId\"=T1.\"TransId\" WHERE T1.\"U_FactEntry\"='" + txtDoc.Value + "' ");
+                    oDatos.DoQuery("SELECT T0.\"Account\",T0.\"Debit\",T0.\"Credit\" FROM JDT1 T0 INNER JOIN OJDT T1 ON T0.\"TransId\"=T1.\"TransId\" WHERE T1.\"U_CyC_DocNum\"='" + txtDoc.Value + "' ");
                     while (!oDatos.EoF)
                     {
                         if (fila == 0)
@@ -117,7 +119,7 @@ namespace tarjeta
                     oAsiento.DueDate = DateTime.Now;
                     oAsiento.ReferenceDate = DateTime.Now;
                     oAsiento.Memo = "";
-                    oAsiento.UserFields.Fields.Item("U_FactEntry").Value = txtDoc.Value;
+                    oAsiento.UserFields.Fields.Item("U_CyC_DocNum").Value = txtDoc.Value;
                     //detalle
                     //debito
                     oAsiento.Lines.AccountCode = v_cuentaDeb;

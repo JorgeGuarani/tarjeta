@@ -4,17 +4,22 @@ using System.Text;
 using SAPbouiCOM.Framework;
 using SAPbobsCOM;
 using SAPbouiCOM;
+using System.Runtime.Remoting.Contexts;
+using System.IO;
+using System.Net;
+using B1SLayer;
+using System.Threading.Tasks;
 
 namespace tarjeta
 {
     class Menu
     {
         public static SAPbobsCOM.Company sbo = null;
-        public void AddMenuItems()
+        public async Task AddMenuItemsAsync()
         {
             SAPbouiCOM.Menus oMenus = null;
             SAPbouiCOM.MenuItem oMenuItem = null;
-            sbo = (SAPbobsCOM.Company)SAPbouiCOM.Framework.Application.SBO_Application.Company.GetDICompany();           
+            sbo = (SAPbobsCOM.Company)SAPbouiCOM.Framework.Application.SBO_Application.Company.GetDICompany();
 
             oMenus = SAPbouiCOM.Framework.Application.SBO_Application.Menus;
 
@@ -40,6 +45,8 @@ namespace tarjeta
 
             //}
 
+            
+
             try
             {
                 // Get the menu collection of the newly added pop-up item
@@ -50,7 +57,12 @@ namespace tarjeta
                 oCreationPackage.Type = SAPbouiCOM.BoMenuType.mt_STRING;
                 oCreationPackage.UniqueID = "ContraAsiento";
                 oCreationPackage.String = "Generar Contra Asiento";
+                if (oMenus.Exists("ContraAsiento"))
+                {
+                    oMenus.RemoveEx("ContraAsiento");
+                }
                 oMenus.AddEx(oCreationPackage);
+                SAPbouiCOM.Framework.Application.SBO_Application.SetStatusBarMessage("AddOn Tarjetas conectado con éxito!!", SAPbouiCOM.BoMessageTime.bmt_Short, false);
             }
             catch (Exception er)
             { //  Menu already exists
@@ -64,10 +76,10 @@ namespace tarjeta
 
             try
             {
-                if (pVal.BeforeAction && pVal.MenuUID == "tarjeta.Form1")
-                {
-                    SAPbouiCOM.Framework.Application.SBO_Application.OpenForm(BoFormObjectEnum.fo_UserDefinedObject, "TARJETA", "");                                   
-                }
+                //if (pVal.BeforeAction && pVal.MenuUID == "tarjeta.Form1")
+                //{
+                //    SAPbouiCOM.Framework.Application.SBO_Application.OpenForm(BoFormObjectEnum.fo_UserDefinedObject, "TARJETA", "");                                   
+                //}
 
                 if(pVal.BeforeAction && pVal.MenuUID== "ContraAsiento")
                 {

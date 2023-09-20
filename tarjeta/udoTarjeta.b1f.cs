@@ -63,6 +63,8 @@ namespace tarjeta
         /// </summary>
         public override void OnInitializeFormEvents()
         {
+            this.LoadAfter += new SAPbouiCOM.Framework.FormBase.LoadAfterHandler(this.Form_LoadAfter);
+            this.UnloadAfter += new UnloadAfterHandler(this.Form_UnloadAfter);
 
         }
 
@@ -91,6 +93,7 @@ namespace tarjeta
         private SAPbouiCOM.EditText txtAsiento;
         private SAPbouiCOM.StaticText lblcuenta;
         private SAPbouiCOM.Button btnOK;
+        public string v_cuenta = null;
         #endregion
 
 
@@ -159,11 +162,11 @@ namespace tarjeta
                 //realizmaos la consulta para traer los datos de las tarjetas
                 SAPbobsCOM.Recordset oConsulta;
                 oConsulta = (SAPbobsCOM.Recordset)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.BoRecordset);
-                oConsulta.DoQuery("SELECT T2.\"DocEntry\",T0.\"VoucherNum\",T0.\"CreditSum\",T1.\"CardCode\",T1.\"CardName\" FROM \"FG_PROD\".RCT3 T0 " +
-                                  "INNER JOIN \"FG_PROD\".ORCT T1 ON T0.\"DocNum\"=T1.\"DocNum\" "+
-                                  "INNER JOIN \"FG_PROD\".OINV T2 ON T1.\"DocNum\"=T2.\"ReceiptNum\" " +
+                oConsulta.DoQuery("SELECT T2.\"DocEntry\",T0.\"VoucherNum\",T0.\"CreditSum\",T1.\"CardCode\",T1.\"CardName\" FROM RCT3 T0 " +
+                                  "INNER JOIN ORCT T1 ON T0.\"DocNum\"=T1.\"DocNum\" "+
+                                  "INNER JOIN OINV T2 ON T1.\"DocNum\"=T2.\"ReceiptNum\" " +
                                   "WHERE T0.\"CrTypeCode\"=" + v_tipo + " AND T1.\"DocDate\" BETWEEN '" + txtFechaIni.Value + "' AND '" + txtFechaFin.Value + "' " +
-                                  "AND T0.\"CreditAcct\" IN ('"+ cboSucu.Selected.Value + "') AND (T2.\"U_U_Destino\" IS NULL OR T2.\"U_U_Destino\"='NO')  ");
+                                  "AND T0.\"CreditAcct\" IN ('"+ cboSucu.Selected.Value + "')  AND (T2.\"U_U_Destino\" IS NULL OR T2.\"U_U_Destino\"='NO')");
 
                 SAPbouiCOM.DBDataSource source = oForm.DataSources.DBDataSources.Item("@TARJETADET");
                 oMatrix.FlushToDataSource();
@@ -350,6 +353,11 @@ namespace tarjeta
         {
            try
             {
+                v_cuenta = cboSucu.Selected.Value.ToString();
+               
+
+                
+
                 //instanciamos el objeto para crear el asiento
                 SAPbobsCOM.JournalEntries oAsiento;
                 oAsiento = (SAPbobsCOM.JournalEntries)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.oJournalEntries);
@@ -359,55 +367,123 @@ namespace tarjeta
                 //recorremos la matrix
                 int v_cant = oMatrix.RowCount;
                 int fila = 1;
+                int v_dep = 0;
                 while(fila <= v_cant)
                 {
                     SAPbouiCOM.CheckBox oCheck = (SAPbouiCOM.CheckBox)oMatrix.Columns.Item(1).Cells.Item(fila).Specific;
                     SAPbouiCOM.EditText oDocnum = (SAPbouiCOM.EditText)oMatrix.Columns.Item(2).Cells.Item(fila).Specific;
+                    SAPbouiCOM.EditText oVou = (SAPbouiCOM.EditText)oMatrix.Columns.Item(5).Cells.Item(fila).Specific;
                     SAPbouiCOM.EditText oMonto = (SAPbouiCOM.EditText)oMatrix.Columns.Item(6).Cells.Item(fila).Specific;
+                   
+                    string v_vou = oVou.Value.ToString();
                     
                     //consultamos si esta checkeado
                     bool v_check = oCheck.Checked;
                     if (v_check == true)
                     {
-                        //mandamos las variables
-                        double v_monto = double.Parse(oMonto.Value.Replace(".", ","));
-                        string v_cuentaCredito = cboSucu.Selected.Value;
-                        //cabecera
-                        oAsiento.Series = 23;
-                        oAsiento.TaxDate = v_feAsiento;
-                        oAsiento.DueDate = v_feAsiento;
-                        oAsiento.ReferenceDate = v_feAsiento;
-                        oAsiento.Memo = txtMemo.Value;
-                        oAsiento.UserFields.Fields.Item("U_FactEntry").Value = oDocnum.Value;
-                        //detalle
-                        //debito
-                        oAsiento.Lines.AccountCode = txtCuentaMa.Value;
-                        oAsiento.Lines.Debit = v_monto;
-                        oAsiento.Lines.Add();
-                        //credito
-                        oAsiento.Lines.AccountCode = v_cuentaCredito;
-                        oAsiento.Lines.Credit = v_monto;
-                        oAsiento.Lines.Add();
-                        int error = oAsiento.Add();
-                        if (error != 0)
+                        //deposito
+                        SAPbobsCOM.CompanyService oService = Menu.sbo.GetCompanyService();
+                        SAPbobsCOM.DepositsService dpService = (SAPbobsCOM.DepositsService)oService.GetBusinessService(SAPbobsCOM.ServiceTypes.DepositsService);
+                        SAPbobsCOM.Deposit dpsAddMpesa = (SAPbobsCOM.Deposit)dpService.GetDataInterface(SAPbobsCOM.DepositsServiceDataInterfaces.dsDeposit);
+                        SAPbobsCOM.DepositParams dpsParamAddMpesa;
+                        SAPbobsCOM.CreditLines créditos = dpsAddMpesa.Credits;
+                        SAPbobsCOM.CreditLine credit;
+                        dpsAddMpesa.DepositType = SAPbobsCOM.BoDepositTypeEnum.dtCredit;
+                        dpsAddMpesa.DepositDate = DateTime.Now;
+                        //dpsAddMpesa.AllocationAccount = txtCuentaMa.Value;
+                        dpsAddMpesa.DepositAccount = txtCuentaMa.Value;
+                        dpsAddMpesa.VoucherAccount = txtCuentaMa.Value;
+                        dpsAddMpesa.CommissionAccount = "6.01.01.001.018";
+                        dpsAddMpesa.Commission = 0;// double.Parse(oMonto.Value.Replace(".",","));
+                        dpsAddMpesa.CommissionDate = Convert.ToDateTime(objBridge.Format_StringToDate(txtFechaIni.Value).Fields.Item(0).Value);
+                        dpsAddMpesa.DepositCurrency = "GS";                       
+                        dpsAddMpesa.JournalRemarks = txtMemo.Value;
+                        //dpsAddMpesa.BPLID = v_dep;
+                        dpsAddMpesa.ReconcileAfterDeposit = SAPbobsCOM.BoYesNoEnum.tYES;
+                        credit = dpsAddMpesa.Credits.Add();
+
+                        SAPbobsCOM.Recordset oAbs;
+                        oAbs = (SAPbobsCOM.Recordset)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.BoRecordset);
+                        oAbs.DoQuery("SELECT * FROM OCRH  WHERE \"VoucherNum\"='"+ v_vou + "'");
+                        string v_absId = oAbs.Fields.Item(0).Value.ToString();
+
+                        credit.AbsId = int.Parse(v_absId);
+                        dpsParamAddMpesa = dpService.AddDeposit(dpsAddMpesa);
+                        v_dep++;
+                        //actualizamos el campo en la factura
+                        SAPbobsCOM.Documents oDocumento;
+                        oDocumento = (SAPbobsCOM.Documents)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.oInvoices);
+                        if (oDocumento.GetByKey(int.Parse(oDocnum.Value)))
                         {
-                            string errorDes = Menu.sbo.GetLastErrorDescription();
-                            SAPbouiCOM.Framework.Application.SBO_Application.MessageBox(errorDes, 1, "OK");
+                            oDocumento.UserFields.Fields.Item("U_U_Destino").Value = "SI";
+                            oDocumento.Update();
                         }
-                        else
-                        {
-                            //actualizamos el campo en la factura
-                            SAPbobsCOM.Documents oDocumento;
-                            oDocumento = (SAPbobsCOM.Documents)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.oInvoices);
-                            if(oDocumento.GetByKey(int.Parse(oDocnum.Value)))
-                            {
-                                oDocumento.UserFields.Fields.Item("U_U_Destino").Value = "SI";
-                                oDocumento.Update();
-                            }
-                        }
+
+                        ////buscamos el docnum de la factura
+                        //SAPbobsCOM.Recordset oInterno;
+                        //oInterno = (SAPbobsCOM.Recordset)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.BoRecordset);
+                        //oInterno.DoQuery("SELECT \"DocNum\" FROM OINV WHERE \"DocEntry\"='"+oDocnum.Value+"' ");
+                        //string v_base = oInterno.Fields.Item(0).Value.ToString();
+                        ////mandamos las variables
+                        //double v_monto = double.Parse(oMonto.Value.Replace(".", ","));
+                        //string v_cuentaCredito = cboSucu.Selected.Value;
+                        ////cabecera
+                        //oAsiento.Series = 23;
+                        //oAsiento.TaxDate = v_feAsiento;
+                        //oAsiento.DueDate = v_feAsiento;
+                        //oAsiento.ReferenceDate = v_feAsiento;
+                        //oAsiento.Memo = txtMemo.Value;
+                        //oAsiento.UserFields.Fields.Item("U_CyC_DocNum").Value = oDocnum.Value;
+                        //oAsiento.AdjustTransaction = BoYesNoEnum.tYES;
+                        ////detalle
+                        ////debito
+                        //oAsiento.Lines.AccountCode = txtCuentaMa.Value;
+                        //oAsiento.Lines.Debit = v_monto;
+                        //oAsiento.Lines.Add();
+                        //oAsiento.Lines.ShortName = txtCuentaMa.Value;
+                        ////credito
+                        //oAsiento.Lines.AccountCode = v_cuentaCredito;
+                        //oAsiento.Lines.Credit = v_monto;
+                        //oAsiento.Lines.ShortName = v_cuentaCredito;
+                        //oAsiento.Lines.Add();
+                        //int error = oAsiento.Add();
+                        //if (error != 0)
+                        //{
+                        //    string errorDes = Menu.sbo.GetLastErrorDescription();
+                        //    SAPbouiCOM.Framework.Application.SBO_Application.MessageBox(errorDes, 1, "OK");
+                        //}
+                        //else
+                        //{                          
+                        //    //actualizamos el campo en la factura
+                        //    SAPbobsCOM.Documents oDocumento;
+                        //    oDocumento = (SAPbobsCOM.Documents)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.oInvoices);
+                        //    if(oDocumento.GetByKey(int.Parse(oDocnum.Value)))
+                        //    {
+                        //        oDocumento.UserFields.Fields.Item("U_U_Destino").Value = "SI";
+                        //        oDocumento.Update();
+                        //    }
+                        //}
+
                     }
                     fila++;
-                }                                          
+                }
+
+                //consultamos la última conciliación
+                SAPbobsCOM.Recordset oCode;
+                oCode = (SAPbobsCOM.Recordset)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.BoRecordset);
+                oCode.DoQuery("SELECT MAX(\"DocEntry\") FROM \"@TARJETA\" ");
+                SAPbobsCOM.Recordset oDetallesCon;
+                oDetallesCon = (SAPbobsCOM.Recordset)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.BoRecordset);
+                oDetallesCon.DoQuery("SELECT * FROM \"@TARJETADET\" WHERE \"Code\"='"+oCode.Fields.Item(0).Value+"' ");
+
+                //realizamos la conciliacion interna
+                //SAPbouiCOM.Framework.Application.SBO_Application.ActivateMenuItem("9461");
+                //SAPbouiCOM.Form formRec = SAPbouiCOM.Framework.Application.SBO_Application.Forms.ActiveForm;
+                //SAPbouiCOM.EditText oCuenta = (SAPbouiCOM.EditText)formRec.Items.Item("120000072").Specific;
+                //SAPbouiCOM.Button oBtn = (SAPbouiCOM.Button)formRec.Items.Item("120000001").Specific;
+                //oCuenta.Value = v_cuenta;
+                //oBtn.Item.Click();
+
             } catch(Exception e)
             {
 
@@ -419,6 +495,33 @@ namespace tarjeta
         private void cboSucu_ComboSelectAfter(object sboObject, SAPbouiCOM.SBOItemEventArg pVal)
         {
             txtMemo.Value = "Compra POS TD - " + cboSucu.Selected.Description.ToString();
+
+            string v_cod = txtCode.Value;
+            if (string.IsNullOrEmpty(v_cod))
+            {
+                //code inicial
+                SAPbobsCOM.Recordset oCode;
+                oCode = (SAPbobsCOM.Recordset)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.BoRecordset);
+                oCode.DoQuery("SELECT COALESCE(MAX(\"DocEntry\"),0)+1 FROM \"@TARJETA\" ");
+                txtCode.Value = oCode.Fields.Item(0).Value.ToString();
+                txtMemo.Item.Click();
+                txtCode.Item.Enabled = false;
+            }
+
+        }
+
+        
+
+        private void Form_LoadAfter(SAPbouiCOM.SBOItemEventArg pVal)
+        {
+            
+
+        }
+
+        private void Form_UnloadAfter(SAPbouiCOM.SBOItemEventArg pVal)
+        {
+            
+           
 
         }
     }
