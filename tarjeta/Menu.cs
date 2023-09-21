@@ -7,7 +7,6 @@ using SAPbouiCOM;
 using System.Runtime.Remoting.Contexts;
 using System.IO;
 using System.Net;
-using B1SLayer;
 using System.Threading.Tasks;
 
 namespace tarjeta
@@ -15,7 +14,7 @@ namespace tarjeta
     class Menu
     {
         public static SAPbobsCOM.Company sbo = null;
-        public async Task AddMenuItemsAsync()
+        public  void AddMenuItems()
         {
             SAPbouiCOM.Menus oMenus = null;
             SAPbouiCOM.MenuItem oMenuItem = null;

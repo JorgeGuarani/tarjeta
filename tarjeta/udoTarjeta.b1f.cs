@@ -15,6 +15,7 @@ namespace tarjeta
     class udoTarjeta : UDOFormBase
     {
         public static string v_documento = null;
+        public bool v_grabar = false;
         public udoTarjeta()
         {
         }
@@ -128,6 +129,7 @@ namespace tarjeta
         {            
             try
             {
+                v_grabar = false;
                 //habilitamos el boton de excel
                 btnExcel.Item.Enabled = true;               
                 //verificamos la variable de fecha
@@ -166,7 +168,7 @@ namespace tarjeta
                                   "INNER JOIN ORCT T1 ON T0.\"DocNum\"=T1.\"DocNum\" "+
                                   "INNER JOIN OINV T2 ON T1.\"DocNum\"=T2.\"ReceiptNum\" " +
                                   "WHERE T0.\"CrTypeCode\"=" + v_tipo + " AND T1.\"DocDate\" BETWEEN '" + txtFechaIni.Value + "' AND '" + txtFechaFin.Value + "' " +
-                                  "AND T0.\"CreditAcct\" IN ('"+ cboSucu.Selected.Value + "')  AND (T2.\"U_U_Destino\" IS NULL OR T2.\"U_U_Destino\"='NO')");
+                                  "AND T0.\"CreditAcct\" IN ('"+ cboSucu.Selected.Value + "') AND (T2.\"U_U_Destino\" IS NULL OR T2.\"U_U_Destino\"='NO') ");
 
                 SAPbouiCOM.DBDataSource source = oForm.DataSources.DBDataSources.Item("@TARJETADET");
                 oMatrix.FlushToDataSource();
@@ -253,8 +255,8 @@ namespace tarjeta
             // oProgresbar = SAPbouiCOM.Framework.Application.SBO_Application.StatusBar.CreateProgressBar("Cargando", rowCount, true);
             int f = 1;
             int fin = rowCount;
-            int exRows = rowCount - 1;
-            int filaExcel = 0;
+            int exRows = rowCount;
+            int filaExcel = 1;
             double v_totalExcel = 0;
             NumberFormatInfo nfi = new CultureInfo("en-US", false).NumberFormat;
             //recorremos el excel
@@ -351,144 +353,106 @@ namespace tarjeta
         //FUNCION PARA CREAR LOS ASIENTOS CONTABLES
         private void Button0_ClickAfter(object sboObject, SAPbouiCOM.SBOItemEventArg pVal)
         {
-           try
+            if (v_grabar == false)
             {
-                v_cuenta = cboSucu.Selected.Value.ToString();
-               
-
-                
-
-                //instanciamos el objeto para crear el asiento
-                SAPbobsCOM.JournalEntries oAsiento;
-                oAsiento = (SAPbobsCOM.JournalEntries)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.oJournalEntries);
-
-                SAPbobsCOM.SBObob objBridge = (SAPbobsCOM.SBObob)Menu.sbo.GetBusinessObject(BoObjectTypes.BoBridge);
-                DateTime v_feAsiento = Convert.ToDateTime(objBridge.Format_StringToDate(txtAsiento.Value).Fields.Item(0).Value);
-                //recorremos la matrix
-                int v_cant = oMatrix.RowCount;
-                int fila = 1;
-                int v_dep = 0;
-                while(fila <= v_cant)
+                try
                 {
-                    SAPbouiCOM.CheckBox oCheck = (SAPbouiCOM.CheckBox)oMatrix.Columns.Item(1).Cells.Item(fila).Specific;
-                    SAPbouiCOM.EditText oDocnum = (SAPbouiCOM.EditText)oMatrix.Columns.Item(2).Cells.Item(fila).Specific;
-                    SAPbouiCOM.EditText oVou = (SAPbouiCOM.EditText)oMatrix.Columns.Item(5).Cells.Item(fila).Specific;
-                    SAPbouiCOM.EditText oMonto = (SAPbouiCOM.EditText)oMatrix.Columns.Item(6).Cells.Item(fila).Specific;
-                   
-                    string v_vou = oVou.Value.ToString();
-                    
-                    //consultamos si esta checkeado
-                    bool v_check = oCheck.Checked;
-                    if (v_check == true)
+                    v_cuenta = cboSucu.Selected.Value.ToString();
+                    //instanciamos el objeto para crear el asiento
+                    SAPbobsCOM.JournalEntries oAsiento;
+                    oAsiento = (SAPbobsCOM.JournalEntries)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.oJournalEntries);
+
+                    SAPbobsCOM.SBObob objBridge = (SAPbobsCOM.SBObob)Menu.sbo.GetBusinessObject(BoObjectTypes.BoBridge);
+                    DateTime v_feAsiento = Convert.ToDateTime(objBridge.Format_StringToDate(txtAsiento.Value).Fields.Item(0).Value);
+                    //recorremos la matrix
+                    int v_cant = oMatrix.RowCount;
+                    int fila = 1;
+                    int v_dep = 0;
+                    while (fila <= v_cant)
                     {
-                        //deposito
-                        SAPbobsCOM.CompanyService oService = Menu.sbo.GetCompanyService();
-                        SAPbobsCOM.DepositsService dpService = (SAPbobsCOM.DepositsService)oService.GetBusinessService(SAPbobsCOM.ServiceTypes.DepositsService);
-                        SAPbobsCOM.Deposit dpsAddMpesa = (SAPbobsCOM.Deposit)dpService.GetDataInterface(SAPbobsCOM.DepositsServiceDataInterfaces.dsDeposit);
-                        SAPbobsCOM.DepositParams dpsParamAddMpesa;
-                        SAPbobsCOM.CreditLines créditos = dpsAddMpesa.Credits;
-                        SAPbobsCOM.CreditLine credit;
-                        dpsAddMpesa.DepositType = SAPbobsCOM.BoDepositTypeEnum.dtCredit;
-                        dpsAddMpesa.DepositDate = DateTime.Now;
-                        //dpsAddMpesa.AllocationAccount = txtCuentaMa.Value;
-                        dpsAddMpesa.DepositAccount = txtCuentaMa.Value;
-                        dpsAddMpesa.VoucherAccount = txtCuentaMa.Value;
-                        dpsAddMpesa.CommissionAccount = "6.01.01.001.018";
-                        dpsAddMpesa.Commission = 0;// double.Parse(oMonto.Value.Replace(".",","));
-                        dpsAddMpesa.CommissionDate = Convert.ToDateTime(objBridge.Format_StringToDate(txtFechaIni.Value).Fields.Item(0).Value);
-                        dpsAddMpesa.DepositCurrency = "GS";                       
-                        dpsAddMpesa.JournalRemarks = txtMemo.Value;
-                        //dpsAddMpesa.BPLID = v_dep;
-                        dpsAddMpesa.ReconcileAfterDeposit = SAPbobsCOM.BoYesNoEnum.tYES;
-                        credit = dpsAddMpesa.Credits.Add();
+                        SAPbouiCOM.CheckBox oCheck = (SAPbouiCOM.CheckBox)oMatrix.Columns.Item(1).Cells.Item(fila).Specific;
+                        SAPbouiCOM.EditText oDocnum = (SAPbouiCOM.EditText)oMatrix.Columns.Item(2).Cells.Item(fila).Specific;
+                        SAPbouiCOM.EditText oVou = (SAPbouiCOM.EditText)oMatrix.Columns.Item(5).Cells.Item(fila).Specific;
+                        SAPbouiCOM.EditText oMonto = (SAPbouiCOM.EditText)oMatrix.Columns.Item(6).Cells.Item(fila).Specific;
 
-                        SAPbobsCOM.Recordset oAbs;
-                        oAbs = (SAPbobsCOM.Recordset)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.BoRecordset);
-                        oAbs.DoQuery("SELECT * FROM OCRH  WHERE \"VoucherNum\"='"+ v_vou + "'");
-                        string v_absId = oAbs.Fields.Item(0).Value.ToString();
+                        string v_vou = oVou.Value.ToString();
 
-                        credit.AbsId = int.Parse(v_absId);
-                        dpsParamAddMpesa = dpService.AddDeposit(dpsAddMpesa);
-                        v_dep++;
-                        //actualizamos el campo en la factura
-                        SAPbobsCOM.Documents oDocumento;
-                        oDocumento = (SAPbobsCOM.Documents)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.oInvoices);
-                        if (oDocumento.GetByKey(int.Parse(oDocnum.Value)))
+                        //consultamos si esta checkeado
+                        bool v_check = oCheck.Checked;
+                        if (v_check == true)
                         {
-                            oDocumento.UserFields.Fields.Item("U_U_Destino").Value = "SI";
-                            oDocumento.Update();
+                            //deposito
+                            SAPbobsCOM.CompanyService oService = Menu.sbo.GetCompanyService();
+                            SAPbobsCOM.DepositsService dpService = (SAPbobsCOM.DepositsService)oService.GetBusinessService(SAPbobsCOM.ServiceTypes.DepositsService);
+                            SAPbobsCOM.Deposit dpsAddMpesa = (SAPbobsCOM.Deposit)dpService.GetDataInterface(SAPbobsCOM.DepositsServiceDataInterfaces.dsDeposit);
+                            SAPbobsCOM.DepositParams dpsParamAddMpesa;
+                            SAPbobsCOM.CreditLines créditos = dpsAddMpesa.Credits;
+                            SAPbobsCOM.CreditLine credit;
+                            dpsAddMpesa.DepositType = SAPbobsCOM.BoDepositTypeEnum.dtCredit;
+                            dpsAddMpesa.DepositDate = DateTime.Now;
+                            //dpsAddMpesa.AllocationAccount = txtCuentaMa.Value;
+                            dpsAddMpesa.DepositAccount = txtCuentaMa.Value;
+                            dpsAddMpesa.VoucherAccount = txtCuentaMa.Value;
+                            dpsAddMpesa.CommissionAccount = "6.01.01.001.018";
+                            dpsAddMpesa.Commission = 0;// double.Parse(oMonto.Value.Replace(".",","));
+                            dpsAddMpesa.CommissionDate = Convert.ToDateTime(objBridge.Format_StringToDate(txtFechaIni.Value).Fields.Item(0).Value);
+                            dpsAddMpesa.DepositCurrency = "GS";
+                            dpsAddMpesa.JournalRemarks = txtMemo.Value;
+                            //dpsAddMpesa.BPLID = v_dep;
+                            dpsAddMpesa.ReconcileAfterDeposit = SAPbobsCOM.BoYesNoEnum.tYES;
+                            credit = dpsAddMpesa.Credits.Add();
+
+                            SAPbobsCOM.Recordset oAbs;
+                            oAbs = (SAPbobsCOM.Recordset)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.BoRecordset);
+                            oAbs.DoQuery("SELECT * FROM OCRH  WHERE \"VoucherNum\"='" + v_vou + "'");
+                            string v_absId = oAbs.Fields.Item(0).Value.ToString();
+
+                            credit.AbsId = int.Parse(v_absId);
+                            try
+                            {
+                                dpsParamAddMpesa = dpService.AddDeposit(dpsAddMpesa);
+                                //actualizamos el campo en la factura
+                                SAPbobsCOM.Documents oDocumento;
+                                oDocumento = (SAPbobsCOM.Documents)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.oInvoices);
+                                if (oDocumento.GetByKey(int.Parse(oDocnum.Value)))
+                                {
+                                    oDocumento.UserFields.Fields.Item("U_U_Destino").Value = "SI";
+                                    oDocumento.Update();
+                                }
+                            }
+                            catch (Exception e)
+                            {
+                                if (e.ToString().Contains("por otro usuario"))
+                                {
+                                    oCheck.Checked = false;
+                                    int color = Color.Blue.ToArgb();
+                                    this.oMatrix.CommonSetting.SetRowBackColor(fila, color);
+                                    SAPbouiCOM.Framework.Application.SBO_Application.MessageBox("Depósito ya generado por otro usuario", 1, "OK");
+                                }
+                                else
+                                {
+                                    oCheck.Checked = false;
+                                    int color = Color.Blue.ToArgb();
+                                    this.oMatrix.CommonSetting.SetRowBackColor(fila, color);
+                                    SAPbouiCOM.Framework.Application.SBO_Application.MessageBox(e.ToString(), 1, "OK");
+
+                                }
+
+                            }
+
+
+
                         }
-
-                        ////buscamos el docnum de la factura
-                        //SAPbobsCOM.Recordset oInterno;
-                        //oInterno = (SAPbobsCOM.Recordset)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.BoRecordset);
-                        //oInterno.DoQuery("SELECT \"DocNum\" FROM OINV WHERE \"DocEntry\"='"+oDocnum.Value+"' ");
-                        //string v_base = oInterno.Fields.Item(0).Value.ToString();
-                        ////mandamos las variables
-                        //double v_monto = double.Parse(oMonto.Value.Replace(".", ","));
-                        //string v_cuentaCredito = cboSucu.Selected.Value;
-                        ////cabecera
-                        //oAsiento.Series = 23;
-                        //oAsiento.TaxDate = v_feAsiento;
-                        //oAsiento.DueDate = v_feAsiento;
-                        //oAsiento.ReferenceDate = v_feAsiento;
-                        //oAsiento.Memo = txtMemo.Value;
-                        //oAsiento.UserFields.Fields.Item("U_CyC_DocNum").Value = oDocnum.Value;
-                        //oAsiento.AdjustTransaction = BoYesNoEnum.tYES;
-                        ////detalle
-                        ////debito
-                        //oAsiento.Lines.AccountCode = txtCuentaMa.Value;
-                        //oAsiento.Lines.Debit = v_monto;
-                        //oAsiento.Lines.Add();
-                        //oAsiento.Lines.ShortName = txtCuentaMa.Value;
-                        ////credito
-                        //oAsiento.Lines.AccountCode = v_cuentaCredito;
-                        //oAsiento.Lines.Credit = v_monto;
-                        //oAsiento.Lines.ShortName = v_cuentaCredito;
-                        //oAsiento.Lines.Add();
-                        //int error = oAsiento.Add();
-                        //if (error != 0)
-                        //{
-                        //    string errorDes = Menu.sbo.GetLastErrorDescription();
-                        //    SAPbouiCOM.Framework.Application.SBO_Application.MessageBox(errorDes, 1, "OK");
-                        //}
-                        //else
-                        //{                          
-                        //    //actualizamos el campo en la factura
-                        //    SAPbobsCOM.Documents oDocumento;
-                        //    oDocumento = (SAPbobsCOM.Documents)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.oInvoices);
-                        //    if(oDocumento.GetByKey(int.Parse(oDocnum.Value)))
-                        //    {
-                        //        oDocumento.UserFields.Fields.Item("U_U_Destino").Value = "SI";
-                        //        oDocumento.Update();
-                        //    }
-                        //}
-
+                        fila++;
                     }
-                    fila++;
                 }
+                catch (Exception e)
+                {
 
-                //consultamos la última conciliación
-                SAPbobsCOM.Recordset oCode;
-                oCode = (SAPbobsCOM.Recordset)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.BoRecordset);
-                oCode.DoQuery("SELECT MAX(\"DocEntry\") FROM \"@TARJETA\" ");
-                SAPbobsCOM.Recordset oDetallesCon;
-                oDetallesCon = (SAPbobsCOM.Recordset)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.BoRecordset);
-                oDetallesCon.DoQuery("SELECT * FROM \"@TARJETADET\" WHERE \"Code\"='"+oCode.Fields.Item(0).Value+"' ");
-
-                //realizamos la conciliacion interna
-                //SAPbouiCOM.Framework.Application.SBO_Application.ActivateMenuItem("9461");
-                //SAPbouiCOM.Form formRec = SAPbouiCOM.Framework.Application.SBO_Application.Forms.ActiveForm;
-                //SAPbouiCOM.EditText oCuenta = (SAPbouiCOM.EditText)formRec.Items.Item("120000072").Specific;
-                //SAPbouiCOM.Button oBtn = (SAPbouiCOM.Button)formRec.Items.Item("120000001").Specific;
-                //oCuenta.Value = v_cuenta;
-                //oBtn.Item.Click();
-
-            } catch(Exception e)
-            {
-
-            }          
-
+                }
+            }
+           
+            v_grabar = true;
         }
 
         //FUNCIONA AL SELECCIONAR UNA SUCURSAL
