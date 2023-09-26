@@ -167,8 +167,10 @@ namespace tarjeta
                 oConsulta.DoQuery("SELECT T2.\"DocEntry\",T0.\"VoucherNum\",T0.\"CreditSum\",T1.\"CardCode\",T1.\"CardName\" FROM RCT3 T0 " +
                                   "INNER JOIN ORCT T1 ON T0.\"DocNum\"=T1.\"DocNum\" "+
                                   "INNER JOIN OINV T2 ON T1.\"DocNum\"=T2.\"ReceiptNum\" " +
+                                  "INNER JOIN OCRH T3 ON T0.\"VoucherNum\"=T3.\"VoucherNum\"  " +
                                   "WHERE T0.\"CrTypeCode\"=" + v_tipo + " AND T1.\"DocDate\" BETWEEN '" + txtFechaIni.Value + "' AND '" + txtFechaFin.Value + "' " +
-                                  "AND T0.\"CreditAcct\" IN ('"+ cboSucu.Selected.Value + "') AND (T2.\"U_U_Destino\" IS NULL OR T2.\"U_U_Destino\"='NO') ");
+                                  "AND T0.\"CreditAcct\" IN ('"+ cboSucu.Selected.Value + "') AND T3.\"Deposited\"='N' AND T2.\"CANCELED\"='N'   "+
+                                  "GROUP BY T2.\"DocEntry\",T0.\"VoucherNum\",T0.\"CreditSum\",T1.\"CardCode\",T1.\"CardName\" ");
 
                 SAPbouiCOM.DBDataSource source = oForm.DataSources.DBDataSources.Item("@TARJETADET");
                 oMatrix.FlushToDataSource();
