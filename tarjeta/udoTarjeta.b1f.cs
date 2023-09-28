@@ -250,7 +250,7 @@ namespace tarjeta
             Microsoft.Office.Interop.Excel._Worksheet xlWorksheet = xlWorkbook.Sheets[1];
             Microsoft.Office.Interop.Excel.Range xlRange = xlWorksheet.UsedRange;
             xlWorkbook.Activate();
-
+            
             int rowCount = xlRange.Rows.Count;
             int columnsCount = xlRange.Columns.Count;
             int colCount = xlRange.Columns.Count;
@@ -316,7 +316,10 @@ namespace tarjeta
                 }
                 f++;
                 //oProgresbar.Text = "Cargando Datos " + f.ToString() + "/" + fin.ToString();
+
             }
+            //xlApp.Workbooks.Close();
+            xlWorkbook.Close();
             SAPbouiCOM.Framework.Application.SBO_Application.MessageBox("Procesado correctamente", 1, "OK");
             //oProgresbar.Text = "Proceso terminado...";
             //oProgresbar.Stop();
