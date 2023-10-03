@@ -16,6 +16,7 @@ namespace tarjeta
     {
         public static string v_documento = null;
         public bool v_grabar = false;
+        SAPbouiCOM.ProgressBar oProgress;
         public udoTarjeta()
         {
         }
@@ -129,6 +130,7 @@ namespace tarjeta
         {            
             try
             {
+               
                 v_grabar = false;
                 //habilitamos el boton de excel
                 btnExcel.Item.Enabled = true;               
@@ -176,9 +178,11 @@ namespace tarjeta
                 oMatrix.FlushToDataSource();
                 source.Clear();
                 int v_filaMatrix = 0;
+                int filaMa = 1;
                 double v_total = 0;
                 int v_rows = oConsulta.RecordCount;
                 NumberFormatInfo nfi = new CultureInfo("en-US", false).NumberFormat;
+                oProgress = SAPbouiCOM.Framework.Application.SBO_Application.StatusBar.CreateProgressBar("Cargando datos...", v_rows, true);
                 //recorremos
                 while (!oConsulta.EoF)
                 {
@@ -198,24 +202,27 @@ namespace tarjeta
                     source.SetValue("U_CodSN", v_filaMatrix, v_cardcode);
                     source.SetValue("U_NomSN", v_filaMatrix, v_cardname);
                     oMatrix.LoadFromDataSource();
-
+                    int color = Color.White.ToArgb();
+                    this.oMatrix.CommonSetting.SetRowBackColor(filaMa, color);
                     oConsulta.MoveNext();
                     v_filaMatrix++;
+                    filaMa++;
 
                     //sumamos el total
                     v_total = v_total + double.Parse(v_monto);
                     lblTotal.Caption = "SAP: " + v_total.ToString("N",nfi);
                     lblProce.Caption = "Proc. SAP: " + v_filaMatrix.ToString() + "/" + v_rows.ToString();
-                    
+                    oProgress.Value += 1;
 
                 }
                 btnOK.Item.Enabled = true;
+                oProgress.Stop();
             }
             catch (Exception e)
             {
                 SAPbouiCOM.Framework.Application.SBO_Application.MessageBox(e.ToString(), 1, "OK");
             }
-
+            
         }
 
         //PROCESO PARA ABRIR LA BUSQUEDA DE ARCHIVOS
@@ -373,6 +380,7 @@ namespace tarjeta
                     int v_cant = oMatrix.RowCount;
                     int fila = 1;
                     int v_dep = 0;
+                    oProgress = SAPbouiCOM.Framework.Application.SBO_Application.StatusBar.CreateProgressBar("Cargando datos...", v_cant, true);
                     while (fila <= v_cant)
                     {
                         SAPbouiCOM.CheckBox oCheck = (SAPbouiCOM.CheckBox)oMatrix.Columns.Item(1).Cells.Item(fila).Specific;
@@ -394,7 +402,7 @@ namespace tarjeta
                             SAPbobsCOM.CreditLines créditos = dpsAddMpesa.Credits;
                             SAPbobsCOM.CreditLine credit;
                             dpsAddMpesa.DepositType = SAPbobsCOM.BoDepositTypeEnum.dtCredit;
-                            dpsAddMpesa.DepositDate = DateTime.Now;
+                            dpsAddMpesa.DepositDate = Convert.ToDateTime(objBridge.Format_StringToDate(txtAsiento.Value).Fields.Item(0).Value);
                             //dpsAddMpesa.AllocationAccount = txtCuentaMa.Value;
                             dpsAddMpesa.DepositAccount = txtCuentaMa.Value;
                             dpsAddMpesa.VoucherAccount = txtCuentaMa.Value;
@@ -409,7 +417,7 @@ namespace tarjeta
 
                             SAPbobsCOM.Recordset oAbs;
                             oAbs = (SAPbobsCOM.Recordset)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.BoRecordset);
-                            oAbs.DoQuery("SELECT * FROM OCRH  WHERE \"VoucherNum\"='" + v_vou + "'");
+                            oAbs.DoQuery("SELECT * FROM OCRH  WHERE \"VoucherNum\"='" + v_vou + "' AND \"CreditSum\"="+ oMonto.Value.Replace(",",".")+ " ");
                             string v_absId = oAbs.Fields.Item(0).Value.ToString();
 
                             credit.AbsId = int.Parse(v_absId);
@@ -444,12 +452,11 @@ namespace tarjeta
                                 }
 
                             }
-
-
-
                         }
                         fila++;
+                        oProgress.Value += 1;
                     }
+                    oProgress.Stop();
                 }
                 catch (Exception e)
                 {
@@ -478,9 +485,7 @@ namespace tarjeta
             }
 
         }
-
-        
-
+       
         private void Form_LoadAfter(SAPbouiCOM.SBOItemEventArg pVal)
         {
             
