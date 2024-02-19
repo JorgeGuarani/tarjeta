@@ -16,6 +16,9 @@ namespace tarjeta
     {
         public static string v_documento = null;
         public bool v_grabar = false;
+        public static double G_totalSAP = 0;
+        public static double G_totalExcel = 0;
+        public static double G_comision = 0;
         SAPbouiCOM.ProgressBar oProgress;
         public formTarjeta()
         {
@@ -62,6 +65,7 @@ namespace tarjeta
             this.Folder0 = ((SAPbouiCOM.Folder)(this.GetItem("3_U_FD").Specific));
             this.btnControl = ((SAPbouiCOM.Button)(this.GetItem("Item_11").Specific));
             this.btnControl.ClickAfter += new SAPbouiCOM._IButtonEvents_ClickAfterEventHandler(this.btnControl_ClickAfter);
+            this.otxtTotalneto = ((SAPbouiCOM.StaticText)(this.GetItem("Item_12").Specific));
             this.OnCustomInitialize();
 
         }
@@ -100,7 +104,7 @@ namespace tarjeta
             otxtDesde.Item.Click();
             otxtCod.Item.Enabled = false;
             otxtComen.Value = "Compra POS TD -";
-            btnGenerar.Item.Enabled = false;
+            btnGenerar.Item.Enabled = true;
         }
 
         #region VARIABLES
@@ -133,9 +137,8 @@ namespace tarjeta
         private SAPbouiCOM.Grid oGridCred;
         private SAPbouiCOM.Folder Folder0;
         private SAPbouiCOM.Button btnControl;
+        private SAPbouiCOM.StaticText otxtTotalneto;
         #endregion
-
-
 
         //FUNCION PARA SUBIR EXCEL
         private void subirExcel(string url)
@@ -247,15 +250,14 @@ namespace tarjeta
             for (int i = 2; i <= rowCount; i++)
             {
                 //cargar matrix de crédito
-                //string v_cardcode = xlRange.Cells[i, 1].Value2.ToString();
-                //string v_cardname = xlRange.Cells[i, 2].Value2.ToString();
-                string v_voucher = xlRange.Cells[i, 2].Value2.ToString();
-                string v_monto = xlRange.Cells[i, 7].Value2.ToString();
+                string v_fecha = xlRange.Cells[i, 1].Value2.ToString();
+                DateTime fecha_v = DateTime.Parse(v_fecha);
+                string v_voucher = xlRange.Cells[i, 3].Value2.ToString();
+                string v_monto = xlRange.Cells[i, 5].Value2.ToString();
+                string v_montoNeto = xlRange.Cells[i, 6].Value2.ToString();
 
                 source.InsertRecord(source.Size);
                 source.Offset = source.Size - 1;
-                //source.SetValue("U_CardCode", filaMa, v_cardcode);
-                //source.SetValue("U_CardName", filaMa, v_cardname);
                 source.SetValue("U_voucher", filaMa, v_voucher);
                 source.SetValue("U_monto", filaMa, v_monto);
                 oMatrixCred2.LoadFromDataSource();
@@ -264,9 +266,11 @@ namespace tarjeta
                 //cargar grilla de crédito
                 oGridCred.DataTable.SetValue("voucher", filaMa, v_voucher);
                 oGridCred.DataTable.SetValue("monto", filaMa, v_monto);
+                oGridCred.DataTable.SetValue("fecha", filaMa, fecha_v.ToString("yyyyMMdd"));
+                oGridCred.DataTable.SetValue("Monto neto", filaMa, v_montoNeto);
                 oGridCred.DataTable.Rows.Add();
                 v_totalExc = v_totalExc + int.Parse(v_monto);
-                otxtTotalExc.Caption = "Total Excel: " + v_totalExc.ToString("N", nfi);
+                //otxtTotalExc.Caption = "Total Excel: " + v_totalExc.ToString("N", nfi);
                 filaMa++;
             }
             //xlApp.Workbooks.Close();
@@ -382,11 +386,120 @@ namespace tarjeta
                 else
                 {
                     #region CREDITO
+                    string v_sucursal = ocboSucu.Selected.Description;
+                    if (v_sucursal.Contains("Bancard"))
+                    {
+                        #region BANCARD
+                        SAPbobsCOM.SBObob objBridge = (SAPbobsCOM.SBObob)Menu.sbo.GetBusinessObject(BoObjectTypes.BoBridge);
+                        //parametro de cabecera
+                        string v_sucu = ocboSucu.Selected.Value.ToString();
+                        string v_fecha = otxtAsiento.Value;
+                        string v_cuentaBanco = otxtBanco.Value;
+                        //generar deposito
+                        SAPbobsCOM.CompanyService oService = Menu.sbo.GetCompanyService();
+                        SAPbobsCOM.DepositsService dpService = (SAPbobsCOM.DepositsService)oService.GetBusinessService(SAPbobsCOM.ServiceTypes.DepositsService);
+                        SAPbobsCOM.Deposit dpsAddCash = (SAPbobsCOM.Deposit)dpService.GetDataInterface(SAPbobsCOM.DepositsServiceDataInterfaces.dsDeposit);
+                        dpsAddCash.DepositType = BoDepositTypeEnum.dtCash;
+                        dpsAddCash.DepositDate = Convert.ToDateTime(objBridge.Format_StringToDate(otxtAsiento.Value).Fields.Item(0).Value);
+                        dpsAddCash.DepositCurrency = "GS";
+                        dpsAddCash.AllocationAccount = v_sucu;
+                        dpsAddCash.DepositAccount = v_cuentaBanco;
+                        dpsAddCash.TotalLC = G_totalExcel;
+                        dpsAddCash.JournalRemarks = "Crédito a comercio " + ocboSucu.Selected.Description;
+                        SAPbobsCOM.DepositParams dpsParamAddCash = dpService.AddDeposit(dpsAddCash);
+                        //generamos el asiento para comision
+                        SAPbobsCOM.JournalEntries oAsiento;
+                        oAsiento = (SAPbobsCOM.JournalEntries)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.oJournalEntries);
+                        oAsiento.Series = 23;
+                        oAsiento.DueDate = Convert.ToDateTime(objBridge.Format_StringToDate(otxtAsiento.Value).Fields.Item(0).Value);
+                        oAsiento.ReferenceDate = Convert.ToDateTime(objBridge.Format_StringToDate(otxtAsiento.Value).Fields.Item(0).Value);
+                        oAsiento.TaxDate = Convert.ToDateTime(objBridge.Format_StringToDate(otxtAsiento.Value).Fields.Item(0).Value);
+                        oAsiento.Lines.ShortName = "6.01.01.001.210";
+                        oAsiento.Lines.Credit = G_comision;
+                        oAsiento.Lines.Debit = 0;
+                        oAsiento.Lines.DueDate = Convert.ToDateTime(objBridge.Format_StringToDate(otxtAsiento.Value).Fields.Item(0).Value);
+                        oAsiento.Lines.TaxDate = Convert.ToDateTime(objBridge.Format_StringToDate(otxtAsiento.Value).Fields.Item(0).Value);
+                        oAsiento.Lines.ReferenceDate1 = Convert.ToDateTime(objBridge.Format_StringToDate(otxtAsiento.Value).Fields.Item(0).Value);
+                        oAsiento.Lines.LineMemo = "BANCARD-" + ocboSucu.Selected.Description + "-COMISION.IVA.RENTA.";
+                        oAsiento.Lines.Add();
+                        oAsiento.Lines.AccountCode = v_sucu;
+                        oAsiento.Lines.Credit = 0;
+                        oAsiento.Lines.Debit = G_comision;
+                        oAsiento.Lines.DueDate = Convert.ToDateTime(objBridge.Format_StringToDate(otxtAsiento.Value).Fields.Item(0).Value);
+                        oAsiento.Lines.TaxDate = Convert.ToDateTime(objBridge.Format_StringToDate(otxtAsiento.Value).Fields.Item(0).Value);
+                        oAsiento.Lines.ReferenceDate1 = Convert.ToDateTime(objBridge.Format_StringToDate(otxtAsiento.Value).Fields.Item(0).Value);
+                        oAsiento.Lines.LineMemo = "BANCARD-" + ocboSucu.Selected.Description + "-COMISION.IVA.RENTA.";
+                        oAsiento.Lines.Add();
+                        int v_error = oAsiento.Add();
+                        #endregion
+
+                    }
+
+                    else
+                    {
+                        #region CABAL Y PANAL
+                        SAPbobsCOM.SBObob objBridge = (SAPbobsCOM.SBObob)Menu.sbo.GetBusinessObject(BoObjectTypes.BoBridge);
+                        //cantidad de filas
+                        int v_cant = oGridCred.Rows.Count -1;
+                        int v_fila = 0;
+                        while(v_fila < v_cant)
+                        {
+                            string v_monto =  oGridCred.DataTable.GetValue("Monto neto", v_fila).ToString();
+                            
+                            //parametro de cabecera
+                            string v_sucu = ocboSucu.Selected.Value.ToString();
+                            string v_fecha = otxtAsiento.Value;
+                            string v_cuentaBanco = otxtBanco.Value;
+                            //generar deposito
+                            SAPbobsCOM.CompanyService oService = Menu.sbo.GetCompanyService();
+                            SAPbobsCOM.DepositsService dpService = (SAPbobsCOM.DepositsService)oService.GetBusinessService(SAPbobsCOM.ServiceTypes.DepositsService);
+                            SAPbobsCOM.Deposit dpsAddCash = (SAPbobsCOM.Deposit)dpService.GetDataInterface(SAPbobsCOM.DepositsServiceDataInterfaces.dsDeposit);
+                            dpsAddCash.DepositType = BoDepositTypeEnum.dtCash;
+                            dpsAddCash.DepositDate = Convert.ToDateTime(objBridge.Format_StringToDate(otxtAsiento.Value).Fields.Item(0).Value);
+                            dpsAddCash.DepositCurrency = "GS";
+                            dpsAddCash.AllocationAccount = v_sucu;
+                            dpsAddCash.DepositAccount = v_cuentaBanco;
+                            dpsAddCash.TotalLC = double.Parse(v_monto);
+                            dpsAddCash.JournalRemarks = "Crédito a comercio " + ocboSucu.Selected.Description;
+                            SAPbobsCOM.DepositParams dpsParamAddCash = dpService.AddDeposit(dpsAddCash);
+                            v_fila++;
+                        }
+                        //generamos el asiento para comision
+                        string v_sucur = ocboSucu.Selected.Value.ToString();
+                        SAPbobsCOM.JournalEntries oAsiento;
+                        oAsiento = (SAPbobsCOM.JournalEntries)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.oJournalEntries);
+                        oAsiento.Series = 23;
+                        oAsiento.DueDate = Convert.ToDateTime(objBridge.Format_StringToDate(otxtAsiento.Value).Fields.Item(0).Value);
+                        oAsiento.ReferenceDate = Convert.ToDateTime(objBridge.Format_StringToDate(otxtAsiento.Value).Fields.Item(0).Value);
+                        oAsiento.TaxDate = Convert.ToDateTime(objBridge.Format_StringToDate(otxtAsiento.Value).Fields.Item(0).Value);
+                        oAsiento.Lines.ShortName = "6.01.01.001.210";
+                        oAsiento.Lines.Credit = G_comision;
+                        oAsiento.Lines.Debit = 0;
+                        oAsiento.Lines.DueDate = Convert.ToDateTime(objBridge.Format_StringToDate(otxtAsiento.Value).Fields.Item(0).Value);
+                        oAsiento.Lines.TaxDate = Convert.ToDateTime(objBridge.Format_StringToDate(otxtAsiento.Value).Fields.Item(0).Value);
+                        oAsiento.Lines.ReferenceDate1 = Convert.ToDateTime(objBridge.Format_StringToDate(otxtAsiento.Value).Fields.Item(0).Value);
+                        oAsiento.Lines.LineMemo = "BANCARD-" + ocboSucu.Selected.Description + "-COMISION.IVA.RENTA.";
+                        oAsiento.Lines.Add();
+                        oAsiento.Lines.AccountCode = v_sucur;
+                        oAsiento.Lines.Credit = 0;
+                        oAsiento.Lines.Debit = G_comision;
+                        oAsiento.Lines.DueDate = Convert.ToDateTime(objBridge.Format_StringToDate(otxtAsiento.Value).Fields.Item(0).Value);
+                        oAsiento.Lines.TaxDate = Convert.ToDateTime(objBridge.Format_StringToDate(otxtAsiento.Value).Fields.Item(0).Value);
+                        oAsiento.Lines.ReferenceDate1 = Convert.ToDateTime(objBridge.Format_StringToDate(otxtAsiento.Value).Fields.Item(0).Value);
+                        oAsiento.Lines.LineMemo = "BANCARD-" + ocboSucu.Selected.Description + "-COMISION.IVA.RENTA.";
+                        oAsiento.Lines.Add();
+                        int v_error = oAsiento.Add();
+
+                        #endregion
+                    }
 
                     #endregion
                 }
             }
-
+            //setemos las variables
+            G_comision = 0;
+            G_totalExcel = 0;
+            G_totalSAP = 0;
             v_grabar = true;
 
         }
@@ -442,85 +555,165 @@ namespace tarjeta
             try
             {
                 v_grabar = false;
-                //habilitamos el boton de excel
-                btnExcel.Item.Enabled = true;
-                //verificamos la variable de fecha
-                string v_fechaINI = otxtDesde.Value;
-                string v_fechFIN = otxtHasta.Value;
-                string v_feAsiento = otxtAsiento.Value;
-                if (string.IsNullOrEmpty(v_fechaINI) || string.IsNullOrEmpty(v_fechFIN) || string.IsNullOrEmpty(v_feAsiento))
+                string v_tarj = null;
+                string v_tipoT = ocboTipo.Selected.Value.ToString();
+                if (v_tipoT.Equals("Débito"))
                 {
-                    SAPbouiCOM.Framework.Application.SBO_Application.MessageBox("Fecha de Inicio, Fin o Asiento no puede quedar vacío!!", 1, "OK");
-                    return;
+                    #region DEBITO
+                    v_tarj = "3";
+                    //habilitamos el boton de excel
+                    btnExcel.Item.Enabled = true;
+                    //verificamos la variable de fecha
+                    string v_fechaINI = otxtDesde.Value;
+                    string v_fechFIN = otxtHasta.Value;
+                    string v_feAsiento = otxtAsiento.Value;
+                    if (string.IsNullOrEmpty(v_fechaINI) || string.IsNullOrEmpty(v_fechFIN) || string.IsNullOrEmpty(v_feAsiento))
+                    {
+                        SAPbouiCOM.Framework.Application.SBO_Application.MessageBox("Fecha de Inicio, Fin o Asiento no puede quedar vacío!!", 1, "OK");
+                        return;
+                    }
+
+                    if (string.IsNullOrEmpty(otxtBanco.Value.ToString()))
+                    {
+                        SAPbouiCOM.Framework.Application.SBO_Application.MessageBox("El campo de cuenta de BANCO no puede quedar vacío!!", 1, "OK");
+                        return;
+                    }
+
+                    if (ocboSucu.Selected.Value.ToString().Equals("Seleccionar"))
+                    {
+                        SAPbouiCOM.Framework.Application.SBO_Application.MessageBox("Debe seleccionar una sucursal", 1, "OK");
+                        return;
+                    }
+
+                    //realizmaos la consulta para traer los datos de las tarjetas
+                    SAPbobsCOM.Recordset oConsulta;
+                    oConsulta = (SAPbobsCOM.Recordset)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.BoRecordset);
+                    oConsulta.DoQuery("call \"CT_NoDepositados\"('" + otxtDesde.Value + "','" + otxtHasta.Value + "','" + ocboSucu.Selected.Value + "','"+ v_tarj + "')");
+
+                    SAPbouiCOM.DBDataSource source = oForm.DataSources.DBDataSources.Item("@TARJETADET");
+                    oMatrixDeb.FlushToDataSource();
+                    source.Clear();
+                    int v_filaMatrix = 0;
+                    int filaMa = 1;
+                    double v_total = 0;
+                    int v_rows = oConsulta.RecordCount;
+                    NumberFormatInfo nfi = new CultureInfo("en-US", false).NumberFormat;
+                    oProgress = SAPbouiCOM.Framework.Application.SBO_Application.StatusBar.CreateProgressBar("Cargando datos...", v_rows, true);
+                    //recorremos
+                    while (!oConsulta.EoF)
+                    {
+
+                        //insertamos los datos en la matrix
+                        string v_docnum = oConsulta.Fields.Item(0).Value.ToString();
+                        string v_voucher = oConsulta.Fields.Item(1).Value.ToString();
+                        string v_monto = oConsulta.Fields.Item(2).Value.ToString();
+                        string v_cardcode = oConsulta.Fields.Item(3).Value.ToString();
+                        string v_cardname = oConsulta.Fields.Item(4).Value.ToString();
+
+                        source.InsertRecord(source.Size);
+                        source.Offset = source.Size - 1;
+                        source.SetValue("U_DocNum", v_filaMatrix, v_docnum);
+                        source.SetValue("U_Voucher", v_filaMatrix, v_voucher);
+                        source.SetValue("U_Monto", v_filaMatrix, v_monto);
+                        source.SetValue("U_CodSN", v_filaMatrix, v_cardcode);
+                        source.SetValue("U_NomSN", v_filaMatrix, v_cardname);
+                        oMatrixDeb.LoadFromDataSource();
+                        int color = Color.White.ToArgb();
+                        this.oMatrixDeb.CommonSetting.SetRowBackColor(filaMa, color);
+                        oConsulta.MoveNext();
+                        v_filaMatrix++;
+                        filaMa++;
+
+                        //sumamos el total
+                        v_total = v_total + double.Parse(v_monto);
+                        olblSAP.Caption = "SAP: " + v_total.ToString("N", nfi);
+                        olblProcSap.Caption = "Proc. SAP: " + v_filaMatrix.ToString() + "/" + v_rows.ToString();
+                        oProgress.Value += 1;
+
+                    }
+                    btnGenerar.Item.Enabled = true;
+                    oProgress.Stop();
+                    #endregion
                 }
-
-                //verificamos el tipo de tarjeta seleccionada
-                string v_tipo = null;
-                string v_tarj = ocboTipo.Selected.Value;
-
-                if (string.IsNullOrEmpty(otxtBanco.Value.ToString()))
+                else
                 {
-                    SAPbouiCOM.Framework.Application.SBO_Application.MessageBox("El campo de cuenta de BANCO no puede quedar vacío!!", 1, "OK");
-                    return;
-                }
+                    #region CREDITO
+                    v_tarj = "2";
+                    //habilitamos el boton de excel
+                    btnExcel.Item.Enabled = true;
+                    //verificamos la variable de fecha
+                    string v_fechaINI = otxtDesde.Value;
+                    string v_fechFIN = otxtHasta.Value;
+                    string v_feAsiento = otxtAsiento.Value;
+                    if (string.IsNullOrEmpty(v_fechaINI) || string.IsNullOrEmpty(v_fechFIN) || string.IsNullOrEmpty(v_feAsiento))
+                    {
+                        SAPbouiCOM.Framework.Application.SBO_Application.MessageBox("Fecha de Inicio, Fin o Asiento no puede quedar vacío!!", 1, "OK");
+                        return;
+                    }
 
-                if (ocboSucu.Selected.Value.ToString().Equals("Seleccionar"))
-                {
-                    SAPbouiCOM.Framework.Application.SBO_Application.MessageBox("Debe seleccionar una sucursal", 1, "OK");
-                    return;
-                }
+                    if (string.IsNullOrEmpty(otxtBanco.Value.ToString()))
+                    {
+                        SAPbouiCOM.Framework.Application.SBO_Application.MessageBox("El campo de cuenta de BANCO no puede quedar vacío!!", 1, "OK");
+                        return;
+                    }
 
-                if (v_tarj.Equals("Débito")) { v_tipo = "3"; }
-                else { v_tipo = ""; }
+                    if (ocboSucu.Selected.Value.ToString().Equals("Seleccionar"))
+                    {
+                        SAPbouiCOM.Framework.Application.SBO_Application.MessageBox("Debe seleccionar una sucursal", 1, "OK");
+                        return;
+                    }
 
-                //realizmaos la consulta para traer los datos de las tarjetas
-                SAPbobsCOM.Recordset oConsulta;
-                oConsulta = (SAPbobsCOM.Recordset)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.BoRecordset);
-                oConsulta.DoQuery("call \"CT_NoDepositados\"('" + otxtDesde.Value + "','" + otxtHasta.Value + "','" + ocboSucu.Selected.Value + "')");
+                    //realizmaos la consulta para traer los datos de las tarjetas
+                    SAPbobsCOM.Recordset oConsulta;
+                    oConsulta = (SAPbobsCOM.Recordset)Menu.sbo.GetBusinessObject(SAPbobsCOM.BoObjectTypes.BoRecordset);
+                    oConsulta.DoQuery("call \"CT_NoDepositados\"('" + otxtDesde.Value + "','" + otxtHasta.Value + "','" + ocboSucu.Selected.Value + "','"+ v_tarj + "')");
 
-                SAPbouiCOM.DBDataSource source = oForm.DataSources.DBDataSources.Item("@TARJETADET");
-                oMatrixDeb.FlushToDataSource();
-                source.Clear();
-                int v_filaMatrix = 0;
-                int filaMa = 1;
-                double v_total = 0;
-                int v_rows = oConsulta.RecordCount;
-                NumberFormatInfo nfi = new CultureInfo("en-US", false).NumberFormat;
-                oProgress = SAPbouiCOM.Framework.Application.SBO_Application.StatusBar.CreateProgressBar("Cargando datos...", v_rows, true);
-                //recorremos
-                while (!oConsulta.EoF)
-                {
+                    SAPbouiCOM.DBDataSource source = oForm.DataSources.DBDataSources.Item("@TARJETADET2");
+                    oMatrixCred1.FlushToDataSource();
+                    source.Clear();
+                    int v_filaMatrix = 0;
+                    int filaMa = 1;
+                    double v_total = 0;
+                    int v_rows = oConsulta.RecordCount;
+                    NumberFormatInfo nfi = new CultureInfo("en-US", false).NumberFormat;
+                    oProgress = SAPbouiCOM.Framework.Application.SBO_Application.StatusBar.CreateProgressBar("Cargando datos...", v_rows, true);
+                    //recorremos
+                    while (!oConsulta.EoF)
+                    {
 
-                    //insertamos los datos en la matrix
-                    string v_docnum = oConsulta.Fields.Item(0).Value.ToString();
-                    string v_voucher = oConsulta.Fields.Item(1).Value.ToString();
-                    string v_monto = oConsulta.Fields.Item(2).Value.ToString();
-                    string v_cardcode = oConsulta.Fields.Item(3).Value.ToString();
-                    string v_cardname = oConsulta.Fields.Item(4).Value.ToString();
+                        //insertamos los datos en la matrix
+                        string v_docnum = oConsulta.Fields.Item(0).Value.ToString();
+                        string v_voucher = oConsulta.Fields.Item(1).Value.ToString();
+                        string v_monto = oConsulta.Fields.Item(2).Value.ToString();
+                        string v_cardcode = oConsulta.Fields.Item(3).Value.ToString();
+                        string v_cardname = oConsulta.Fields.Item(4).Value.ToString();
 
-                    source.InsertRecord(source.Size);
-                    source.Offset = source.Size - 1;
-                    source.SetValue("U_DocNum", v_filaMatrix, v_docnum);
-                    source.SetValue("U_Voucher", v_filaMatrix, v_voucher);
-                    source.SetValue("U_Monto", v_filaMatrix, v_monto);
-                    source.SetValue("U_CodSN", v_filaMatrix, v_cardcode);
-                    source.SetValue("U_NomSN", v_filaMatrix, v_cardname);
-                    oMatrixDeb.LoadFromDataSource();
-                    int color = Color.White.ToArgb();
-                    this.oMatrixDeb.CommonSetting.SetRowBackColor(filaMa, color);
-                    oConsulta.MoveNext();
-                    v_filaMatrix++;
-                    filaMa++;
+                        source.InsertRecord(source.Size);
+                        source.Offset = source.Size - 1;
+                        source.SetValue("U_DocNum", v_filaMatrix, v_docnum);
+                        source.SetValue("U_voucher", v_filaMatrix, v_voucher);
+                        source.SetValue("U_monto", v_filaMatrix, v_monto);
+                        source.SetValue("U_CardCode", v_filaMatrix, v_cardcode);
+                        source.SetValue("U_CardName", v_filaMatrix, v_cardname);
+                        oMatrixCred1.LoadFromDataSource();
+                        int color = Color.White.ToArgb();
+                        this.oMatrixCred1.CommonSetting.SetRowBackColor(filaMa, color);
+                        oConsulta.MoveNext();
+                        v_filaMatrix++;
+                        filaMa++;
 
-                    //sumamos el total
-                    v_total = v_total + double.Parse(v_monto);
-                    olblSAP.Caption = "SAP: " + v_total.ToString("N", nfi);
-                    olblProcSap.Caption = "Proc. SAP: " + v_filaMatrix.ToString() + "/" + v_rows.ToString();
-                    oProgress.Value += 1;
+                        //sumamos el total
+                        //v_total = v_total + double.Parse(v_monto);
+                        //olblSAP.Caption = "SAP: " + v_total.ToString("N", nfi);
+                        //olblProcSap.Caption = "Proc. SAP: " + v_filaMatrix.ToString() + "/" + v_rows.ToString();
+                        //oProgress.Value += 1;
 
-                }
-                btnGenerar.Item.Enabled = true;
-                oProgress.Stop();
+                    }
+                    btnGenerar.Item.Enabled = true;
+                    oProgress.Stop();
+                    #endregion
+                }              
+                
             }
             catch (Exception e)
             {
@@ -565,17 +758,69 @@ namespace tarjeta
 
         }
 
+        //CONTROL DE GRILLAS
         private void btnControl_ClickAfter(object sboObject, SAPbouiCOM.SBOItemEventArg pVal)
         {
+            NumberFormatInfo nfi = new CultureInfo("en-US", false).NumberFormat;
             int gridSap = oMatrixCred1.RowCount;
-            int gridExc = oMatrixCred2.RowCount;
-
-            if(gridSap != gridExc)
+            int gridExc = oGridCred.Rows.Count -1;
+            int cantidad = 1;
+            int filamatrix = 1;
+            int conGrilla = 0;
+            int totalSAP = 0;
+            int totalExcel = 0;
+            int totalneto = 0;
+            int comision = 0;
+            
+            while(conGrilla < gridExc)
             {
-                SAPbouiCOM.Framework.Application.SBO_Application.MessageBox("Las tablas no poseen la misma cantidad de registros", 1, "OK");
-                return;
-            }
+                //voucher del banco
+                string v_voucherExcel = oGridCred.DataTable.GetValue("voucher", conGrilla).ToString();
+                int conMatrix = 1;
+                while (conMatrix <= gridSap)
+                {
+                    SAPbouiCOM.EditText m_voucher = (SAPbouiCOM.EditText)this.oMatrixCred1.Columns.Item(5).Cells.Item(conMatrix).Specific;
+                    SAPbouiCOM.EditText m_total = (SAPbouiCOM.EditText)this.oMatrixCred1.Columns.Item(6).Cells.Item(conMatrix).Specific;
+                    SAPbouiCOM.CheckBox M_CHECK = (SAPbouiCOM.CheckBox)this.oMatrixCred1.Columns.Item(1).Cells.Item(conMatrix).Specific;
+                    string v_voucher = m_voucher.Value;
+                    if (v_voucher.Contains(v_voucherExcel))
+                    {
+                        int color = Color.LightGreen.ToArgb();
+                        this.oMatrixCred1.CommonSetting.SetRowBackColor(conMatrix, color);
+                        oGridCred.CommonSetting.SetRowBackColor(cantidad, color);
+                        M_CHECK.Checked = true;
+                        oGridCred.DataTable.SetValue("check", conGrilla, "Y");
+                        string v_totalSAP = m_total.Value;
+                        char valor = '.';
+                        int v_punto = v_totalSAP.IndexOf(valor);
+                        v_totalSAP = v_totalSAP.Remove(v_punto);
+                        int v_montoSAP = int.Parse(v_totalSAP);
+                        totalSAP = totalSAP + v_montoSAP;
 
+                        string v_totalExcel = oGridCred.DataTable.GetValue("monto", conGrilla).ToString();
+                        string v_totalExcelNeto = oGridCred.DataTable.GetValue("Monto neto", conGrilla).ToString();
+
+                        totalExcel = totalExcel + int.Parse(v_totalExcel);
+                        totalneto = totalneto + int.Parse(v_totalExcelNeto);
+                        break;
+                    }
+                    conMatrix++;
+                }
+
+                conGrilla++;
+                cantidad++;
+            }
+            comision = totalExcel - totalneto;
+            otxtTotalExc.Caption = "Total Excel: " + totalExcel.ToString("N", nfi);
+            otxtTotalSAP.Caption = "Total SAP: " + totalSAP.ToString("N", nfi); ;
+            otxtComision.Caption = "Comisión: " + comision.ToString("N", nfi); ;
+            otxtTotalneto.Caption = "Total neto: " + totalneto.ToString("N", nfi);
+            //mandamos a las variables globales
+            G_totalExcel = totalneto;
+            G_totalSAP = totalExcel;
+            G_comision = comision;
         }
+
+       
     }
 }
