@@ -192,7 +192,7 @@ namespace tarjeta
                         M_VBANCO.Value = v_voucherBanco;
                         M_MBANCO.Value = v_montoBanco;
 
-                        double v_dife = double.Parse(v_monto.Replace(".", ",")) - double.Parse(v_montoBanco);
+                        double v_dife = double.Parse(v_monto.Replace(",", ".")) - double.Parse(v_montoBanco);
                         M_DIF.Value = v_dife.ToString();
 
                         if (v_dife == 0)
@@ -443,8 +443,8 @@ namespace tarjeta
                         //abrir el form de conciliacion
                         SAPbouiCOM.Framework.Application.SBO_Application.OpenForm(BoFormObjectEnum.fo_UserDefinedObject, "OFLT", "");
                         SAPbouiCOM.Form form = SAPbouiCOM.Framework.Application.SBO_Application.Forms.ActiveForm;
+                        reconciliacion();
                         #endregion
-
                     }
 
                     else
@@ -520,7 +520,9 @@ namespace tarjeta
                             int v_error = oAsiento.Add();
                             v_fila++;
                         }
-
+                        SAPbouiCOM.Framework.Application.SBO_Application.OpenForm(BoFormObjectEnum.fo_UserDefinedObject, "OFLT", "");
+                        SAPbouiCOM.Form form = SAPbouiCOM.Framework.Application.SBO_Application.Forms.ActiveForm;
+                        reconciliacion();
 
                         #endregion
                     }
@@ -792,6 +794,23 @@ namespace tarjeta
                 t.IsBackground = true;
                 t.SetApartmentState(ApartmentState.STA);
                 t.Start();
+
+                //prueba para el excel por dispatcher
+                //string v_usu = Menu.sbo.UserName.ToString();
+                //SAPbobsCOM.Recordset ousu;
+                //ousu = (SAPbobsCOM.Recordset)Menu.sbo.GetBusinessObject(BoObjectTypes.BoRecordset);
+                //ousu.DoQuery("");
+
+                //string v_ruta = "C:\\Users\\jorge.chaparro\\OneDrive - Grupo Pettengill\\Documentos\\tarjeta\\Template-tarjeta.xlsx";
+                //string v_rutaCred = "C:\\Users\\jorge.chaparro\\OneDrive - Grupo Pettengill\\Documentos\\tarjeta\\Template-credito.xlsx";
+                //if (v_tipo.Equals("Débito"))
+                //{
+                //    subirExcel(v_ruta);
+                //}
+                //else
+                //{
+                //    excelCredito(v_rutaCred);
+                //}
             }
             catch (Exception e)
             {
